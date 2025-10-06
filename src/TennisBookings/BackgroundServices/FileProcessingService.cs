@@ -1,4 +1,5 @@
 using TennisBookings.Processing;
+using TennisBookings.ResultsProcessing;
 
 namespace TennisBookings.Web.BackgroundServices;
 
@@ -20,7 +21,28 @@ public class FileProcessingService : BackgroundService
 
 	protected override async Task ExecuteAsync(CancellationToken stoppingToken)
 	{
-		// TODO
+		await foreach (var fileName in _fileProcessingChannel.ReadAllAsync(stoppingToken))
+		{
+			using var scope = _serviceProvider.CreateScope(); // Create a new scope for each file and dispose of it when done every each iteration
+
+			var processor = scope.ServiceProvider.GetRequiredService<IResultProcessor>();
+
+			try
+			{
+				await using var stream = File.OpenRead(fileName);
+
+				await processor.ProcessAsync(stream, stoppingToken);
+			}
+			catch (Exception e)
+			{
+				Console.WriteLine(e);
+				throw;
+			}
+			finally
+			{
+				File.Delete(fileName); // Delete the temp file
+			}
+		}
 	}
 
 	internal static class EventIds
